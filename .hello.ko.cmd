@@ -1,0 +1,1 @@
+cmd_/root/Study/Drv_stu/hello.ko := ld -r -m elf_i386 -T /usr/src/linux-headers-3.2.0-24-generic-pae/scripts/module-common.lds --build-id  -o /root/Study/Drv_stu/hello.ko /root/Study/Drv_stu/hello.o /root/Study/Drv_stu/hello.mod.o
