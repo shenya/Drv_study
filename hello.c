@@ -12,6 +12,32 @@ dev_t dev_id;
 int major;
 int minor;
 
+ssize_t f_write(struct file *file, const char __user *buf, size_t length, loff_t * offset);
+
+struct file_operations Fops=
+{
+	.write = f_write,
+};
+
+ssize_t f_write(struct file *file, const char __user *buf, size_t length, loff_t * offset)
+{
+	switch(buf[0])
+	{
+		case 'a':
+						printk(KERN_ALERT "this is a\n");
+						break;
+		case 'b':
+						printk(KERN_ALERT "this is a\n");
+						break;
+						
+
+
+	}
+
+	return 0;
+
+}
+
 static int __init hello_init(void)
 {
 	int ret;
@@ -29,6 +55,13 @@ static int __init hello_init(void)
 
 	printk(KERN_ALERT "char-dev's major: %d, minor : %d\n", major, minor);
 
+	ret = register_chrdev(major, dev_name, &Fops);
+	if(ret < 0)
+	{
+
+	printk(KERN_ALERT "register dev failure\n");
+	}
+
 	return 0;
 }
 
@@ -37,7 +70,8 @@ static int __init hello_init(void)
 static void __exit hello_exit(void)
 {
 	unregister_chrdev_region(dev_id, 1);
-
+	
+	unregister_chrdev(major, dev_name);
 	printk(KERN_ALERT "module exit\n");
 }
 
