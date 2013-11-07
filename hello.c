@@ -12,13 +12,30 @@ dev_t dev_id;
 int major;
 int minor;
 
+int f_open(struct inode *inode, struct file *file);
 ssize_t f_write(struct file *file, const char __user *buf, size_t length, loff_t * offset);
+int f_release(struct inode *inode, struct file *file);
 
 struct file_operations Fops=
 {
+	.open = f_open,
 	.write = f_write,
+	.release = f_release,
 };
 
+int f_open(struct inode *inode, struct file *file)
+{
+
+
+	return 0;
+}
+
+int f_release(struct inode *inode, struct file *file)
+{
+
+
+	return 0;
+}
 ssize_t f_write(struct file *file, const char __user *buf, size_t length, loff_t * offset)
 {
 	switch(buf[0])
@@ -40,9 +57,9 @@ ssize_t f_write(struct file *file, const char __user *buf, size_t length, loff_t
 
 static int __init hello_init(void)
 {
-	int ret;
+//	int ret;
 	printk(KERN_ALERT "module init\n");
-	
+#if 0	
 	ret = alloc_chrdev_region(&dev_id, 0, 1, dev_name);
 	if(ret < 0)
 	{
@@ -54,14 +71,16 @@ static int __init hello_init(void)
 	minor = MINOR(dev_id);
 
 	printk(KERN_ALERT "char-dev's major: %d, minor : %d\n", major, minor);
+#endif
 
-	ret = register_chrdev(major, dev_name, &Fops);
-	if(ret < 0)
+	major = register_chrdev(0, dev_name, &Fops);
+	if(major < 0)
 	{
 
-	printk(KERN_ALERT "register dev failure\n");
+		printk(KERN_ALERT "register dev failure\n");
 	}
 
+	printk(KERN_ALERT "char-dev's major: %d\n", major);
 	return 0;
 }
 
@@ -69,8 +88,8 @@ static int __init hello_init(void)
 
 static void __exit hello_exit(void)
 {
-	unregister_chrdev_region(dev_id, 1);
-	
+//	unregister_chrdev_region(dev_id, 1);
+
 	unregister_chrdev(major, dev_name);
 	printk(KERN_ALERT "module exit\n");
 }
