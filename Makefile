@@ -15,6 +15,8 @@ endif
 
 
 clean:
-	rm *.o *.ko *.order *.symvers
-	rm hello.mod.c
+	-rm *.o *.ko *.order *.symvers
+	-rm hello.mod.c .hello.o.cmd
+	-rm -rf .tmp_versions
+	-rm .hello.ko.cmd .hello.mod.o.cmd
 
