@@ -1,7 +1,7 @@
 #Makefile
 
 ifneq ($(KERNELRELEASE), )
-obj-m := hello.o
+obj-m := nf_study.o
 else
 
 KERNELDIR=/lib/modules/$(shell uname -r)/build
@@ -16,8 +16,8 @@ endif
 
 clean:
 	rm *.o *.ko *.order *.symvers
-	rm hello.mod.c
-	rm .hello.mod.o.cmd
-	rm .hello.ko.cmd
-	rm .hello.o.cmd
+	rm nf_study.mod.c
+	rm .nf_study.mod.o.cmd
+	rm .nf_study.ko.cmd
+	rm .nf_study.o.cmd
 	rm .tmp_versions -rf
