@@ -2,4 +2,9 @@
 
 dmesg: message in log
 
-modinfo mod_name: 
+modinfo mod_name:  display info of module
+
+
+nf_study:
+
+

@@ -44,15 +44,16 @@ static unsigned int hook_nfout(unsigned int hooknum, struct sk_buff *skb,
 
 		struct iphdr *iph = ip_hdr(sk);
 		//8.8.8.8
+#if 0
 		if(iph->daddr == 134744072)
 		{
 			printk("drop packet\n");
 			return NF_DROP;
 		}
 		printk("iph->daddr %d\n", iph->daddr);
-
 		printk(KERN_ALERT "Hi, I can do it\n");
 
+#endif
 
 		return NF_ACCEPT;
 }
@@ -74,7 +75,7 @@ static int __init hello_init(void)
 	ret = nf_register_hook(&nfout);
 	if(ret == 0)
 	{
-			printk(KERN_ALERT "nf register");
+			printk(KERN_ALERT "nf register\n");
 	}
 	nf_register_sockopt(&nf_sockopt_ext);
 	return 0;

@@ -10,6 +10,7 @@ PWD=$(shell pwd)
 
 default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+	gcc sock_test.c
 
 endif
 
@@ -21,3 +22,4 @@ clean:
 	rm .nf_study.ko.cmd
 	rm .nf_study.o.cmd
 	rm .tmp_versions -rf
+	rm a.out
