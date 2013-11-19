@@ -11,6 +11,22 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Guangyao Shen");
 MODULE_DESCRIPTION("driver study");
 
+typedef struct nf_proto_port
+{
+	unsigned int nf_proto;
+	unsigned int nf_port;
+}nf_bound;
+
+struct net_filter
+{
+		//icmp
+		unsigned int icmp_enable;
+		
+		//`nf_bound 
+
+};
+
+struct net_filter nf_status;
 
 static int nf_sockopt_ext_set(struct sock *sk, int optval, void __user *user, unsigned int len);
 
@@ -32,6 +48,17 @@ static int nf_sockopt_ext_set(struct sock *sk, int optval, void __user *user, un
 {
 	
 	printk("setopt extern \n");
+
+	switch(optval)
+	{
+		case SOE_BANDIP :
+			copy_from_user(&nf_status, user, len);
+			printk("nf_status-icmp_enable  %d\n soe\n", nf_status.icmp_enable);
+			break;
+
+		default:
+					break;
+	}
 
 
 	return 0;
