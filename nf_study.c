@@ -14,27 +14,33 @@ MODULE_DESCRIPTION("driver study");
 typedef struct nf_proto_port
 {
 	unsigned int nf_proto;
+	unsigned int nf_ip;
 	unsigned int nf_port;
-}nf_bound;
+}nf_bound_t;
 
 struct net_filter
 {
 		//icmp
 		unsigned int icmp_enable;
 		
-		//`nf_bound 
-
+		nf_bound_t nf_filter; 
 };
 
 struct net_filter nf_status;
+
+#define IS_ICMP_FORBID (nf_status.icmp_enable == 1)
+#define IS_TCP_FORBID  (nf_status.nf_filter.nf_proto == IPPROTO_TCP)
+#define IS_UDP_FORBID	 (nf_status.nf_filter.nf_proto == IPPROTO_UDP)
+
+
 
 static int nf_sockopt_ext_set(struct sock *sk, int optval, void __user *user, unsigned int len);
 
 struct nf_sockopt_ops nf_sockopt_ext =
 {
 		.pf = AF_INET,
-		.set_optmin = SOE_BANDIP,
-		.set_optmax = SOE_BANDIP + 2,
+		.set_optmin = SOE_BANDTCP,
+		.set_optmax = SOE_BANDTCP + 2,
 		.set = nf_sockopt_ext_set,
 
 		.get_optmin = 0,
@@ -46,14 +52,28 @@ struct nf_sockopt_ops nf_sockopt_ext =
 
 static int nf_sockopt_ext_set(struct sock *sk, int optval, void __user *user, unsigned int len)
 {
-	
+	struct net_filter status_temp;
+
 	printk("setopt extern \n");
+
+	copy_from_user(&status_temp, user, len);
 
 	switch(optval)
 	{
-		case SOE_BANDIP :
-			copy_from_user(&nf_status, user, len);
-			printk("nf_status-icmp_enable  %d\n soe\n", nf_status.icmp_enable);
+		case SOE_BANDTCP :
+			printk("nf_status-icmp_enable  %d\n soe\n", status_temp.icmp_enable);
+			printk("nf_status proto: %d, ip %u, port %u\n", status_temp.nf_filter.nf_proto, status_temp.nf_filter.nf_ip, status_temp.nf_filter.nf_port);
+
+			if(status_temp.nf_filter.nf_proto == IPPROTO_TCP)
+			{
+					nf_status.nf_filter.nf_proto = IPPROTO_TCP;
+					nf_status.nf_filter.nf_ip = status_temp.nf_filter.nf_ip;
+					nf_status.nf_filter.nf_port = status_temp.nf_filter.nf_port;
+			}
+			else
+			{
+					nf_status.nf_filter.nf_proto = 0;
+			}
 			break;
 
 		default:
@@ -70,17 +90,26 @@ static unsigned int hook_nfout(unsigned int hooknum, struct sk_buff *skb,
 		struct sk_buff *sk = skb;
 
 		struct iphdr *iph = ip_hdr(sk);
-		//8.8.8.8
-#if 0
-		if(iph->daddr == 134744072)
-		{
-			printk("drop packet\n");
-			return NF_DROP;
-		}
-		printk("iph->daddr %d\n", iph->daddr);
-		printk(KERN_ALERT "Hi, I can do it\n");
 
-#endif
+		printk("iph->daddr %u, iph->proto%d\n", iph->daddr, iph->protocol);
+		
+		if(iph->protocol == IPPROTO_TCP)
+		{
+
+				printk("tcp \n");
+				if(IS_TCP_FORBID)
+				{
+						printk(KERN_ALERT "tcp forbid set\n");
+						if(iph->daddr == nf_status.nf_filter.nf_ip)
+						{
+								printk("drop this packet\n");
+								return NF_DROP;
+						}
+				}
+
+		}
+
+
 
 		return NF_ACCEPT;
 }
