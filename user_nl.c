@@ -32,6 +32,7 @@ int main(void)
 
 	saddr.nl_family = AF_NETLINK;
 	saddr.nl_pid = getpid();
+	printf("pid: %d\n", getpid());
 	saddr.nl_groups = 0;
 	ret = bind(sd, (struct sockaddr *)&saddr, sizeof(saddr));
 	if(ret < 0)
@@ -65,6 +66,6 @@ int main(void)
 	{
 		printf("error \n");
 	}
-
+	printf("end\n");
 	return 0;
 }

@@ -1,0 +1,10 @@
+
+
+struct nlmsghdr
+{
+	__u32 nlmsg_len;
+	__u16 nlmsg_type;
+	__u16 nlmsg_flags;
+	__u32 nlmsg_seq;
+	__u32 nlmsg_pid;
+};
