@@ -96,7 +96,6 @@ int main(void)
 		}
 
 		printf("REceived message: %s\n", (char *)NLMSG_DATA(nlh));
-		break;
 	}
 #endif
 

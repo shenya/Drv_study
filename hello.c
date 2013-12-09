@@ -46,9 +46,7 @@ void sendnlmsg(char *message)
 	NETLINK_CB(skb_l).pid = 0;
 	NETLINK_CB(skb_l).dst_group = 0;
 
-//	message[slen] = '\0';
-//	memcpy(NLMSG_DATA(nlh), message, slen+1);
-	memcpy(NLMSG_DATA(nlh), message, slen);
+	memcpy(NLMSG_DATA(nlh), message, slen+1);
 
 	printk("send message %s \n", (char *)NLMSG_DATA(nlh));
 	netlink_unicast(nl_sk, skb_l, pid, MSG_DONTWAIT);
@@ -74,7 +72,7 @@ void nl_data_ready(struct sk_buff *__skb)
 	char str[100];
 
 	struct completion cmpl;
-	int i = 10;
+	int i = 4;
 
 	skb = skb_get(__skb);
 #if 1
@@ -84,15 +82,15 @@ void nl_data_ready(struct sk_buff *__skb)
 		memcpy(str, NLMSG_DATA(nlh), sizeof(str));
 		printk("message received: %s\n", str);
 		pid = nlh->nlmsg_pid;
-#if 0
+#if 1
 		while(i--)
 		{
 			init_completion(&cmpl);
 			wait_for_completion_timeout(&cmpl, 3 *HZ);
+			sendnlmsg("I am from kernel!");
 		}
 #endif
 
-			sendnlmsg("I am from kernel!");
 		flag = 1;
 		kfree_skb(skb);
 	}
