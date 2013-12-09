@@ -50,7 +50,8 @@ void sendnlmsg(char *message)
 
 	printk("send message %s \n", (char *)NLMSG_DATA(nlh));
 	netlink_unicast(nl_sk, skb_l, pid, MSG_DONTWAIT);
-
+	
+//	kfree_skb(skb_l);  //don't use this , because netlink_unicast do 
 }
 
 int stringlength(char *s)
@@ -227,7 +228,6 @@ static int __init hello_init(void)
 		printk("netlink error");
 		return 1;
 	}
-//	kernel_thread(process_message_thread, NULL, CLONE_KERNEL);
 
 	return 0;
 }
