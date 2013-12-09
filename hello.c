@@ -3,20 +3,104 @@
 #include <linux/netlink.h>
 #include <net/sock.h>
 #include <linux/sched.h>
+#include <linux/timer.h>
+#include <linux/time.h>
+#include <linux/types.h>
+
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Guangyao Shen");
 MODULE_DESCRIPTION("driver study");
 
-#define NETLINK_TEST 17
 #define BUF_SIZE 16384
 
-static struct sock *netlink_exam_sock;
-static unsigned char buffer[BUF_SIZE];
-static unsigned int buffer_tail = 0;
-static int exit_flag = 0;
-static DECLARE_COMPLETION(exit_completion);
-static int process_message_thread(void * data);
+#define NETLINK_TEST 17
+#define MAX_MSGSIZE 1024
 
+
+int stringlength(char *);
+
+void sendnlmsg(char *message);
+int pid;
+int err;
+struct sock *nl_sk = NULL;
+int flag = 0;
+
+void sendnlmsg(char *message)
+{
+	struct sk_buff *skb_l;
+	struct nlmsghdr *nlh;
+	int len = NLMSG_SPACE(MAX_MSGSIZE);
+	int slen = 0;
+	if(!message || !nl_sk)
+	{
+		return;
+	}
+	skb_l = alloc_skb(len, GFP_KERNEL);
+	if(!skb_l)
+	{
+		printk(KERN_ERR "alloc_skb error\n");
+	}
+	slen = stringlength(message);
+	nlh = nlmsg_put(skb_l, 0, 0, 0, MAX_MSGSIZE, 0);
+
+	NETLINK_CB(skb_l).pid = 0;
+	NETLINK_CB(skb_l).dst_group = 0;
+
+//	message[slen] = '\0';
+//	memcpy(NLMSG_DATA(nlh), message, slen+1);
+	memcpy(NLMSG_DATA(nlh), message, slen);
+
+	printk("send message %s \n", (char *)NLMSG_DATA(nlh));
+	netlink_unicast(nl_sk, skb_l, pid, MSG_DONTWAIT);
+
+}
+
+int stringlength(char *s)
+{
+	int slen = 0;
+
+	for(; *s; s++)
+	{
+		slen++;
+	}
+
+	return slen;
+}
+
+void nl_data_ready(struct sk_buff *__skb)
+{
+	struct sk_buff *skb;
+	struct nlmsghdr *nlh;
+	char str[100];
+
+	struct completion cmpl;
+	int i = 10;
+
+	skb = skb_get(__skb);
+#if 1
+	if(skb->len >= NLMSG_SPACE(0))
+	{
+		nlh = nlmsg_hdr(skb);
+		memcpy(str, NLMSG_DATA(nlh), sizeof(str));
+		printk("message received: %s\n", str);
+		pid = nlh->nlmsg_pid;
+#if 0
+		while(i--)
+		{
+			init_completion(&cmpl);
+			wait_for_completion_timeout(&cmpl, 3 *HZ);
+		}
+#endif
+
+			sendnlmsg("I am from kernel!");
+		flag = 1;
+		kfree_skb(skb);
+	}
+#endif
+
+}
+
+#if 0
 static void recv_handler(struct sk_buff *sk)
 {
 	struct sk_buff *skb = sk;
@@ -132,17 +216,19 @@ static int process_message_thread(void * data)
 #endif
 
 
-
+#endif
 
 
 static int __init hello_init(void)
 {
 	printk(KERN_ALERT "module init\n");
 
-	netlink_exam_sock = netlink_kernel_create(&init_net, NETLINK_TEST, 0, recv_handler, NULL, THIS_MODULE);
-	if(netlink_exam_sock == NULL)
+	nl_sk = netlink_kernel_create(&init_net, NETLINK_TEST, 0, nl_data_ready, NULL, THIS_MODULE);
+	if(!nl_sk)
+	{
 		printk("netlink error");
-
+		return 1;
+	}
 //	kernel_thread(process_message_thread, NULL, CLONE_KERNEL);
 
 	return 0;
@@ -154,7 +240,7 @@ static void __exit hello_exit(void)
 {
 	printk(KERN_ALERT "module exit\n");
 
-	netlink_kernel_release(netlink_exam_sock);
+	netlink_kernel_release(nl_sk);
 }
 
 module_init(hello_init);
