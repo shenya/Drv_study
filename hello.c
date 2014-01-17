@@ -7,6 +7,7 @@
 #include <asm/io.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
+#include <linux/semaphore.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Guangyao Shen");
@@ -20,6 +21,7 @@ struct globalmem_dev
 {
 	struct cdev cdev;
 	unsigned char mem[GLOBALMEM_SIZE];
+	struct semaphore sem;
 };
 struct globalmem_dev *globalmem_devp;
 int globalmem_open(struct inode *inode, struct file *filp)
@@ -42,6 +44,7 @@ static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t
 	int ret = 0;
 	
 	struct globalmem_dev *dev = filp->private_data;
+
 	if(p >= GLOBALMEM_SIZE)
 	{
 		return count?-ENXIO:0;
@@ -49,6 +52,10 @@ static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t
 	if(count > GLOBALMEM_SIZE-p)
 	{
 		count = GLOBALMEM_SIZE - p;
+	}
+	if(down_interruptible(&dev->sem))
+	{
+		return -ERESTARTSYS;
 	}
 	
 	if(copy_from_user(dev->mem+p, buf, count))
@@ -61,6 +68,7 @@ static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t
 		ret = count;
 	}
 
+	up(&dev->sem);
 	printk(KERN_INFO "write %d bytes", count);
 	
 	return ret;
@@ -81,6 +89,10 @@ static ssize_t globalmem_read(struct file *filp, char __user *buf, size_t size, 
 		count = GLOBALMEM_SIZE - p;
 	}
 
+	if(down_interruptible(&dev->sem))
+	{
+		return -ERESTARTSYS;
+	}
 	if(copy_to_user(buf, (void *)(dev->mem + p), count))
 	{
 		ret = -EFAULT;
@@ -90,7 +102,7 @@ static ssize_t globalmem_read(struct file *filp, char __user *buf, size_t size, 
 		*ppos += count;
 		ret = count;
 	}
-
+	up(&dev->sem);
 	printk(KERN_INFO "read %d bytes", count);
 	return ret;
 }
@@ -141,6 +153,10 @@ static long globalmem_ioctl( struct file *filp, unsigned int cmd, unsigned long 
 {
 	struct globalmem_dev *dev = filp->private_data;
 
+	if(down_interruptible(&dev->sem))
+	{
+		return -ERESTARTSYS;
+	}
 	switch(cmd)
 	{
 		case MEM_CLEAR:
@@ -151,7 +167,7 @@ static long globalmem_ioctl( struct file *filp, unsigned int cmd, unsigned long 
 		default:
 			return -EINVAL;	
 	}
-
+	up(&dev->sem);
 	return 0;
 }
 static const struct file_operations globalmem_fops = 
@@ -194,6 +210,8 @@ static int __init hello_init(void)
 		goto fail_malloc;
 	}
 	#endif
+
+	sema_init(&globalmem_devp->sem, 1);
 
 	memset(globalmem_devp, 0, sizeof(struct globalmem_dev));
 	globalmem_setup_cdev(globalmem_devp, 0);
