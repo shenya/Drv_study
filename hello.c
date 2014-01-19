@@ -8,6 +8,8 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 #include <linux/semaphore.h>
+#include <linux/wait.h>
+#include <linux/sched.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Guangyao Shen");
@@ -20,8 +22,11 @@ static int major = 221;
 struct globalmem_dev
 {
 	struct cdev cdev;
+	unsigned int current_len;
 	unsigned char mem[GLOBALMEM_SIZE];
 	struct semaphore sem;
+	wait_queue_head_t r_wait;
+	wait_queue_head_t w_wait;
 };
 struct globalmem_dev *globalmem_devp;
 int globalmem_open(struct inode *inode, struct file *filp)
@@ -37,49 +42,64 @@ int globalmem_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t size, loff_t *ppos)
+static ssize_t globalmem_write(struct file *filp, const char __user *buf, size_t count, loff_t *ppos)
 {
-	unsigned long p = *ppos;
-	unsigned int count = size;
+	//unsigned long p = *ppos;
+
 	int ret = 0;
 	
 	struct globalmem_dev *dev = filp->private_data;
+	DECLARE_WAITQUEUE(wait, current);
 
-	if(p >= GLOBALMEM_SIZE)
+	down(&dev->sem);
+	add_wait_queue(&dev->w_wait, &wait);
+	if(dev->current_len == GLOBALMEM_SIZE)
 	{
-		return count?-ENXIO:0;
+		if(filp->f_flags &O_NONBLOCK)
+		{
+			ret = -EAGAIN;
+			goto out;
+		}
+		__set_current_state(TASK_INTERRUPTIBLE);
+		up(&dev->sem);
+		schedule();
+		if(signal_pending(current))
+		{
+			ret = -ERESTARTSYS;
+			goto out2;
+		}
+		down(&dev->sem);
 	}
-	if(count > GLOBALMEM_SIZE-p)
-	{
-		count = GLOBALMEM_SIZE - p;
-	}
-	if(down_interruptible(&dev->sem))
-	{
-		return -ERESTARTSYS;
-	}
-	
-	if(copy_from_user(dev->mem+p, buf, count))
+	if(count > GLOBALMEM_SIZE - dev->current_len)
+		count = GLOBALMEM_SIZE - dev->current_len;
+	if(copy_from_user(dev->mem+dev->current_len, buf, count))
 	{	
 		ret = -EFAULT;
+		goto out;
 	}
 	else
 	{
-		*ppos += count;
+		dev->current_len += count;
+		printk(KERN_INFO "written %d bytes(s), current_len: %d\n", count, dev->current_len);
+		wake_up_interruptible(&dev->r_wait);
 		ret = count;
 	}
 
-	up(&dev->sem);
-	printk(KERN_INFO "write %d bytes", count);
+	out: up(&dev->sem);
+	out2: remove_wait_queue(&dev->w_wait, &wait);
+
+	set_current_state(TASK_RUNNING);
+
 	
 	return ret;
 }
-static ssize_t globalmem_read(struct file *filp, char __user *buf, size_t size, loff_t *ppos)
+static ssize_t globalmem_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
 {
-	unsigned long p = *ppos;
-	unsigned int count = size;
+//	unsigned long p = *ppos;
+	//unsigned int count = size;
 	int ret = 0;
 	struct globalmem_dev *dev = filp->private_data;
-
+#if 0
 	if(p >= GLOBALMEM_SIZE)
 	{
 		return count?-ENXIO: 0;
@@ -88,22 +108,56 @@ static ssize_t globalmem_read(struct file *filp, char __user *buf, size_t size, 
 	{
 		count = GLOBALMEM_SIZE - p;
 	}
-
-	if(down_interruptible(&dev->sem))
+#endif
+	DECLARE_WAITQUEUE(wait, current);
+	printk(KERN_INFO "herre\n");
+	down(&dev->sem);
+	printk(KERN_INFO "herkr 2\n");
+	add_wait_queue(&dev->r_wait, &wait);
+	printk(KERN_INFO "herkr 3\n");
+	if(dev->current_len == 0)
 	{
-		return -ERESTARTSYS;
+		printk(KERN_INFO" dev->current_len = 0\n");
+		if(filp->f_flags &O_NONBLOCK)
+		{
+			printk(KERN_INFO "O_NONBLOCK is set\n");
+			ret = -EAGAIN;
+			goto out;
+		}
+		printk(KERN_INFO "1\n");
+		__set_current_state(TASK_INTERRUPTIBLE);
+		up(&dev->sem);
+		schedule();
+		printk(KERN_INFO "2\n");
+		if(signal_pending(current))
+		{
+			ret = -ERESTARTSYS;
+			goto out2;
+		}
+
+		down(&dev->sem);
 	}
-	if(copy_to_user(buf, (void *)(dev->mem + p), count))
+	printk(KERN_INFO "3\n");
+	if(count > dev->current_len)
+		count = dev->current_len;
+	if(copy_to_user(buf, dev->mem , count))
 	{
 		ret = -EFAULT;
+		goto out;
 	}
 	else
 	{
-		*ppos += count;
+		memcpy(dev->mem, dev->mem+count, dev->current_len-count);
+		dev->current_len -= count;
+		printk(KERN_INFO "read %d bytes(s), current_len: %d\n", count, dev->current_len);
+		wake_up_interruptible(&dev->w_wait);
 		ret = count;
 	}
-	up(&dev->sem);
+	out: up(&dev->sem);
+	out2: remove_wait_queue(&dev->w_wait, &wait);
 	printk(KERN_INFO "read %d bytes", count);
+
+	set_current_state(TASK_RUNNING);
 	return ret;
 }
 static loff_t globalmem_llseek(struct file *filp, loff_t offset, int orig)
@@ -211,12 +265,13 @@ static int __init hello_init(void)
 	}
 	#endif
 
-	sema_init(&globalmem_devp->sem, 1);
 
 	memset(globalmem_devp, 0, sizeof(struct globalmem_dev));
+	sema_init(&globalmem_devp->sem, 1);
 	globalmem_setup_cdev(globalmem_devp, 0);
 	printk(KERN_ALERT "module init\n");
-
+	init_waitqueue_head(&globalmem_devp->r_wait);
+	init_waitqueue_head(&globalmem_devp->w_wait);
 	return 0;
 fail_malloc:
 	unregister_chrdev_region(devno, 1);
