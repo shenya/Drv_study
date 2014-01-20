@@ -10,6 +10,7 @@
 #include <linux/semaphore.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
+#include <linux/poll.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Guangyao Shen");
@@ -224,6 +225,27 @@ static long globalmem_ioctl( struct file *filp, unsigned int cmd, unsigned long 
 	up(&dev->sem);
 	return 0;
 }
+static unsigned int globalmem_poll(struct file *filp, poll_table *wait)
+{
+	unsigned int mask = 0;
+	struct globalmem_dev *dev = filp->private_data;
+
+	down(&dev->sem);
+	poll_wait(filp, &dev->r_wait, wait);
+	poll_wait(filp, &dev->w_wait, wait);
+
+	if(dev->current_len != 0)
+	{
+		mask |= POLLIN|POLLRDNORM;
+	}
+	if(dev->current_len != GLOBALMEM_SIZE)
+	{
+		mask |= POLLOUT|POLLWRNORM;
+	}
+
+	up(&dev->sem);
+	return mask;
+}
 static const struct file_operations globalmem_fops = 
 {
 	.owner = THIS_MODULE,
@@ -233,8 +255,8 @@ static const struct file_operations globalmem_fops =
 	.llseek = globalmem_llseek,
 	.release = globalmem_release,
 	.unlocked_ioctl = globalmem_ioctl,
+	.poll = globalmem_poll,
 };
-
 static void globalmem_setup_cdev(struct globalmem_dev *dev, int index)
 {
 	int err, devno = MKDEV(major, index);
